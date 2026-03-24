@@ -1,24 +1,15 @@
-import { useState } from "react";
-import { Button } from "./components/ui/button";
+import UseFormStatusJsonServerExample from "./components/UseFormStatusJsonServerExample";
+import UseOptimisticExample from "./components/UseOptimisticExample";
+
+
+
+
+
 
 const App = () => {
-  const [userInfo, setUserInfo] = useState({
-    name: "Jack",
-    age: 26,
-    gender: "male",
-  });
-  const handleUpdateUserInfo = () => {
-    setUserInfo({
-      ...userInfo,
-      name: "Keesoon",
-    });
-  };
   return (
     <>
-      <p>name: {userInfo.name}</p>
-      <p>age: {userInfo.age}</p>
-      <p>gender: {userInfo.gender}</p>
-      <Button onClick={handleUpdateUserInfo}>Update UserInfo</Button>
+      <UseOptimisticExample />
     </>
   );
 };

@@ -36,6 +36,7 @@ type Post = {
 
 const client = axios.create({ baseURL: BASE });
 
+/** API에서 likes가 빠지거나 문자열일 때도 UI에서 숫자로 쓰기 위해 통일 */
 function normalizePosts(raw: Post[]): Post[] {
   return raw.map((p) => ({
     ...p,
@@ -43,6 +44,7 @@ function normalizePosts(raw: Post[]): Post[] {
   }));
 }
 
+/** json-server 페이지네이션: 헤더 x-total-count로 전체 개수(무한 스크롤 여부 판단) */
 async function fetchPostsPage(page: number) {
   const res = await client.get<Post[]>("/posts", {
     params: {
@@ -77,9 +79,16 @@ function SubmitButton() {
 
 export default function UseOptimisticExample() {
   /** 서버와 일치시키는 확정 목록 — Action이 끝나면 이 값이 화면의 기준이 됨 */
+  /**
+   * 확정 상태(source of truth). 서버 응답을 반영한 뒤 여기만 바꾼다.
+   * Action이 끝나면 useOptimistic은 이 값을 기준으로 다시 그린다(실패 시 롤백도 이 덕분).
+   */
   const [realPosts, setRealPosts] = useState<Post[]>([]);
 
-  /** 문서: useOptimistic(확정값) — 전환 중에만 임시 UI */
+  /**
+   * 화면에 쓰는 목록 = realPosts + (진행 중인 전환 동안만) 낙관적 덧씌움.
+   * setOptimisticPosts는 realPosts를 직접 바꾸지 않고, “잠깐 보여 줄 스냅샷”만 쌓는다.
+   */
   const [posts, setOptimisticPosts] = useOptimistic(realPosts);
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -94,6 +103,7 @@ export default function UseOptimisticExample() {
   const loadingMoreRef = useRef(false);
   const listScrollRef = useRef<HTMLDivElement>(null);
 
+  // 마운트 시 1페이지 로드 → 성공 시 realPosts에만 반영(낙관적 레이어 없음)
   useEffect(() => {
     let cancel = false;
     (async () => {
@@ -117,6 +127,7 @@ export default function UseOptimisticExample() {
     };
   }, []);
 
+  /** 스크롤 끝 근처에서 다음 페이지를 realPosts 끝에 이어 붙임 */
   const loadNextPage = useCallback(async () => {
     if (!hasMore || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
@@ -147,6 +158,7 @@ export default function UseOptimisticExample() {
     }
   }, [hasMore]);
 
+  /** 바닥 근처(80px)면 loadNextPage 한 번 호출 — 중복은 loadingMoreRef로 막음 */
   function handleListScroll(e: UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
     if (listBooting || !hasMore || loadingMoreRef.current) return;
@@ -154,12 +166,16 @@ export default function UseOptimisticExample() {
     if (nearBottom) void loadNextPage();
   }
 
-  /* ---- 추가: <form action> = 이미 Action(전환) 안에서 실행 ---- */
+  /**
+   * 폼 제출 = React가 Action으로 감싸서 실행 → useFormStatus의 pending과 맞물림.
+   * 순서: ① 임시 id로 목록 맨 위에 즉시 표시 → ② POST 성공 시 서버 id로 realPosts 교체
+   */
   async function addAction(formData: FormData) {
     setErr("");
     const title = String(formData.get("title") ?? "").trim();
     if (!title) return;
 
+    // 서버 id 전까지 음수 임시 id로 행을 구분(수정/삭제/좋아요 비활성 등)
     const tempId = -Date.now();
     const optimisticRow: Post = {
       id: tempId,
@@ -168,6 +184,7 @@ export default function UseOptimisticExample() {
       likes: 0,
     };
 
+    // 아직 realPosts는 그대로 — 화면에는 새 글이 바로 보임
     setOptimisticPosts((current) => [optimisticRow, ...current]);
 
     try {
@@ -180,6 +197,7 @@ export default function UseOptimisticExample() {
         ...data,
         likes: typeof data.likes === "number" ? data.likes : 0,
       };
+      // 확정: 임시 행 제거하고 서버가 준 행으로 교체 → 낙관적 레이어 자동 정리
       startTransition(() => {
         setRealPosts((prev) => [
           saved,
@@ -188,6 +206,7 @@ export default function UseOptimisticExample() {
       });
     } catch {
       setErr("추가 실패");
+      // realPosts는 변하지 않았으므로 새 배열로만 트리거해도 목록에서 임시 행이 사라짐(롤백)
       startTransition(() => setRealPosts((p) => [...p]));
     }
   }
@@ -198,6 +217,7 @@ export default function UseOptimisticExample() {
     setDraft(p.title);
   }
 
+  /** 제목 수정: 전환 안에서 낙관적 반영 → PATCH 후 realPosts로 확정, 실패 시 롤백 */
   async function saveEdit(id: number) {
     const title = draft.trim();
     if (!title) return;
@@ -223,6 +243,7 @@ export default function UseOptimisticExample() {
     });
   }
 
+  /** 삭제: 목록에서 먼저 빼 보이기 → DELETE 성공 시 realPosts에서도 제거 */
   async function removePost(id: number) {
     if (id < 0) return;
     setErr("");
@@ -244,6 +265,10 @@ export default function UseOptimisticExample() {
     });
   }
 
+  /**
+   * 좋아요 낙관적 업데이트 대표 패턴.
+   * posts에서 현재 행을 읽어 +1을 계산한 뒤, 같은 전환 안에서 PATCH까지 이어 간다.
+   */
   async function likePost(id: number) {
     if (id < 0) return;
     setErr("");
@@ -277,6 +302,8 @@ export default function UseOptimisticExample() {
       }
     });
   }
+
+  /* ---------- UI: 렌더는 항상 `posts`(낙관적이 적용된 목록) 기준 ---------- */
 
   return (
     <div className="min-h-screen bg-slate-100 p-6">
@@ -323,6 +350,7 @@ export default function UseOptimisticExample() {
           <ul className="space-y-2">
             {posts.map((p) => {
               const editing = editingId === p.id;
+              // p.id < 0: 추가 직후 서버 id 없음 → 파란 테두리로 낙관적 행 표시
               return (
                 <li
                   key={p.id}

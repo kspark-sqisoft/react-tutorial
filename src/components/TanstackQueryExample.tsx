@@ -13,7 +13,7 @@ import {
     type InfiniteData,
 } from "@tanstack/react-query";
 import axios from "axios";
-import { useCallback, useRef, useState, type FormEvent, type UIEvent } from "react";
+import { useCallback, useRef, useState, type UIEvent } from "react";
 
 const BASE = "http://localhost:3000";
 const PAGE_SIZE = 10;

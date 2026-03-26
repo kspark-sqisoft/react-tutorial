@@ -19,7 +19,7 @@ const Layout = () => {
         <Sidebar open={open} setOpen={setOpen} />
 
         <div className="flex flex-col flex-1">
-          <AppBar setOpen={setOpen} dark={dark} setDark={setDark} />
+          <AppBar setOpen={setOpen} setDark={setDark} />
           <Content />
         </div>
       </div>
@@ -81,11 +81,10 @@ const Sidebar = ({ open, setOpen }: SidebarProps) => {
 // ✅ AppBar Props
 type AppBarProps = {
   setOpen: SetState<boolean>;
-  dark: boolean;
   setDark: SetState<boolean>;
 };
 
-const AppBar = ({ setOpen, dark, setDark }: AppBarProps) => {
+const AppBar = ({ setOpen, setDark }: AppBarProps) => {
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-800 shadow">
       <button className="md:hidden" onClick={() => setOpen(true)}>
